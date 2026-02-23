@@ -2,6 +2,16 @@ import { useMemo, useState } from "react"
 import Map, { Source, Layer, Popup } from "react-map-gl/maplibre"
 import "maplibre-gl/dist/maplibre-gl.css"
 
+function asArray(x) {
+  if (Array.isArray(x)) return x
+  if (Array.isArray(x?.features)) return x.features
+  return []
+}
+
+function propsOf(p) {
+  return p?.properties && typeof p.properties === "object" ? p.properties : p
+}
+
 function normalizeSex(raw) {
   const s = String(raw ?? "").trim().toLowerCase()
   if (!s) return "unknown"
@@ -11,28 +21,38 @@ function normalizeSex(raw) {
 }
 
 function getSex(p) {
+  const o = propsOf(p)
   return (
-    p.sex ??
-    p.gender ??
-    p.person_sex ??
-    p.person_gender ??
-    p.main_person_sex ??
-    p.main_person_gender ??
-    p?.person?.sex ??
-    p?.person?.gender ??
-    p?.people?.[0]?.sex ??
-    p?.people?.[0]?.gender
+    o.sex ??
+    o.gender ??
+    o.person_sex ??
+    o.person_gender ??
+    o.main_person_sex ??
+    o.main_person_gender ??
+    o?.person?.sex ??
+    o?.person?.gender ??
+    o?.people?.[0]?.sex ??
+    o?.people?.[0]?.gender
   )
 }
 
 function getLngLat(p) {
-  const lng = parseFloat(p.longitude ?? p.lng ?? p.lon ?? p.LON ?? p.Longitude)
-  const lat = parseFloat(p.latitude ?? p.lat ?? p.LAT ?? p.Latitude)
+  // GeoJSON Feature
+  if (Array.isArray(p?.geometry?.coordinates) && p.geometry.coordinates.length >= 2) {
+    const [lng, lat] = p.geometry.coordinates
+    if (Number.isFinite(lng) && Number.isFinite(lat)) return [lng, lat]
+  }
+
+  const o = propsOf(p)
+  const lng = parseFloat(o.longitude ?? o.lng ?? o.lon ?? o.LON ?? o.Longitude)
+  const lat = parseFloat(o.latitude ?? o.lat ?? o.LAT ?? o.Latitude)
   if (Number.isFinite(lng) && Number.isFinite(lat)) return [lng, lat]
   return null
 }
 
-function toGeoJSON(plaques) {
+function toGeoJSON(input) {
+  const plaques = asArray(input)
+
   return {
     type: "FeatureCollection",
     features: plaques
@@ -40,20 +60,22 @@ function toGeoJSON(plaques) {
         const coords = getLngLat(p)
         if (!coords) return null
 
+        const o = propsOf(p)
         const sex = normalizeSex(getSex(p))
-        const title = p.title ?? p.person ?? p.name ?? p.inscription ?? "Plaque"
-        const inscription = p.inscription ?? p.description ?? ""
+
+        const title = o.title ?? o.person ?? o.name ?? o.inscription ?? "Plaque"
+        const inscription = o.inscription ?? o.description ?? ""
 
         return {
           type: "Feature",
           geometry: { type: "Point", coordinates: coords },
           properties: {
-            id: String(p.id ?? p.plaque_id ?? idx),
+            id: String(o.id ?? o.plaque_id ?? idx),
             title: String(title),
             inscription: String(inscription),
             sex: String(sex),
             isFemale: sex === "female" ? 1 : 0,
-            role: String(p.role ?? p.occupation ?? p.category ?? "Unknown"),
+            role: String(o.role ?? o.occupation ?? o.category ?? "Unknown"),
           },
         }
       })
@@ -72,12 +94,14 @@ export default function MapDisplay({
 }) {
   const [popup, setPopup] = useState(null)
 
+  const safePlaqueData = useMemo(() => asArray(plaqueData), [plaqueData])
+
   const filtered = useMemo(() => {
     if (sexView === "female") {
-      return plaqueData.filter((p) => normalizeSex(getSex(p)) === "female")
+      return safePlaqueData.filter((p) => normalizeSex(getSex(p)) === "female")
     }
-    return plaqueData
-  }, [plaqueData, sexView])
+    return safePlaqueData
+  }, [safePlaqueData, sexView])
 
   const geojson = useMemo(() => toGeoJSON(filtered), [filtered])
 

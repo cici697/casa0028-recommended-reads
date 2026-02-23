@@ -1,4 +1,4 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import "./tw-styles.css"
 
 import TitleBar from "./components/TitleBar"
@@ -14,6 +14,12 @@ export default function App() {
 
   const [sexFilter, setSexFilter] = useState("all") // "all" | "female"
   const [showHeatmap, setShowHeatmap] = useState(false)
+
+  const plaques = useMemo(() => {
+    if (Array.isArray(plaqueData)) return plaqueData
+    if (Array.isArray(plaqueData?.features)) return plaqueData.features
+    return []
+  }, [])
 
   function handleSelectPlaque(plaqueProps) {
     setSelectedPlaque(plaqueProps)
@@ -72,13 +78,13 @@ export default function App() {
           longitude={-0.1276}
           latitude={51.5072}
           zoom={11}
-          plaqueData={plaqueData}
+          plaqueData={plaques}
           sexView={sexFilter}
           showHeatmap={showHeatmap}
           onSelectPlaque={handleSelectPlaque}
         />
 
-        <RoleChart plaqueData={plaqueData} sexFilter={sexFilter} />
+        <RoleChart plaqueData={plaques} sexFilter={sexFilter} />
       </div>
 
       <PlaqueModal
