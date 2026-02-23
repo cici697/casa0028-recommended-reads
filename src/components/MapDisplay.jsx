@@ -2,6 +2,9 @@ import { useMemo, useState } from "react"
 import Map, { Source, Layer, Popup } from "react-map-gl/maplibre"
 import "maplibre-gl/dist/maplibre-gl.css"
 
+const BASEMAP_STYLE =
+  "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+
 function asArray(x) {
   if (Array.isArray(x)) return x
   if (Array.isArray(x?.features)) return x.features
@@ -54,9 +57,33 @@ function cleanQuery(input) {
     .replace(/\(.*?\)/g, " ")
     .replace(/\b\d{4}\b/g, " ")
     .replace(/[–—]/g, " ")
+    .replace(/\bblue\s+plaque\b/gi, " ")
+    .replace(/\bplaque\b/gi, " ")
+    .replace(/\bcommemorates\b/gi, " ")
+    .replace(/\blived\s+here\b/gi, " ")
+    .replace(/\bworked\s+here\b/gi, " ")
+    .replace(/\bwas\s+born\s+here\b/gi, " ")
+    .replace(/\bdied\s+here\b/gi, " ")
+    .replace(/\bdrank\s+here\b/gi, " ")
     .replace(/[^a-zA-Z0-9\u00C0-\u024F\u4e00-\u9fff\s'-]/g, " ")
     .replace(/\s+/g, " ")
     .trim()
+}
+
+function bestPersonName(o) {
+  const fromFields = o.person ?? o.name ?? o.person_name ?? o.main_person_name
+  if (fromFields) return String(fromFields)
+
+  const fromTitle = cleanQuery(o.title ?? "")
+  if (fromTitle) return fromTitle
+
+  const fromInscription = cleanQuery(o.inscription ?? "")
+  if (fromInscription) {
+    const tokens = fromInscription.split(" ").filter(Boolean)
+    return tokens.slice(0, Math.min(tokens.length, 4)).join(" ")
+  }
+
+  return "Unknown"
 }
 
 function toGeoJSON(input) {
@@ -75,8 +102,8 @@ function toGeoJSON(input) {
         const title = o.title ?? o.person ?? o.name ?? o.inscription ?? "Plaque"
         const inscription = o.inscription ?? o.description ?? ""
 
-        const personName = String(o.person ?? o.name ?? title ?? "Unknown")
-        const olQuery = cleanQuery(personName || title)
+        const personName = bestPersonName(o)
+        const olQuery = cleanQuery(personName)
 
         return {
           type: "Feature",
@@ -88,8 +115,8 @@ function toGeoJSON(input) {
             sex: String(sex),
             isFemale: sex === "female" ? 1 : 0,
             role: String(o.role ?? o.occupation ?? o.category ?? "Unknown"),
-            personName,
-            olQuery,
+            personName: String(personName),
+            olQuery: String(olQuery),
           },
         }
       })
@@ -167,8 +194,9 @@ export default function MapDisplay({
         <Map
           initialViewState={{ longitude, latitude, zoom }}
           style={{ width: "100%", height: "100%" }}
-          mapStyle="https://demotiles.maplibre.org/style.json"
+          mapStyle={BASEMAP_STYLE}
           interactiveLayerIds={interactiveLayerIds}
+          onError={(e) => console.error("Map error:", e?.error ?? e)}
           onClick={(e) => {
             const f = e.features?.[0]
             if (!f) return
