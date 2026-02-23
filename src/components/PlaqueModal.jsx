@@ -20,8 +20,7 @@ function cleanQuery(input) {
 
 async function fetchOpenLibrary(query, mode = "q") {
   const base = "https://openlibrary.org/search.json"
-  const param =
-    mode === "author" ? "author" : mode === "title" ? "title" : "q"
+  const param = mode === "author" ? "author" : mode === "title" ? "title" : "q"
   const url = `${base}?${param}=${encodeURIComponent(query)}&limit=8`
 
   const res = await fetch(url)
@@ -48,7 +47,12 @@ export default function PlaqueModal({ isOpen, onClose, plaque }) {
     plaque?.personName ?? plaque?.title ?? plaque?.name ?? "Unknown"
 
   const query = useMemo(() => {
-    const q = plaque?.olQuery ?? plaque?.personName ?? plaque?.title ?? plaque?.name ?? ""
+    const q =
+      plaque?.olQuery ??
+      plaque?.personName ??
+      plaque?.title ??
+      plaque?.name ??
+      ""
     return cleanQuery(q)
   }, [plaque])
 
@@ -64,11 +68,9 @@ export default function PlaqueModal({ isOpen, onClose, plaque }) {
         setLoading(true)
 
         let result = await fetchOpenLibrary(query, "q")
-
         if (!result.length) result = await fetchOpenLibrary(query, "author")
         if (!result.length) result = await fetchOpenLibrary(query, "title")
 
-        // fallback: shorten query
         if (!result.length) {
           const tokens = query.split(" ").filter(Boolean)
           const shorter = tokens.slice(0, Math.min(tokens.length, 3)).join(" ")
@@ -84,8 +86,8 @@ export default function PlaqueModal({ isOpen, onClose, plaque }) {
         if (!cancelled) setLoading(false)
       }
     }
-    run()
 
+    run()
     return () => {
       cancelled = true
     }
