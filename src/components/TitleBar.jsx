@@ -1,13 +1,8 @@
-function TitleBar() {
-    return (
-        <header className="bg-white">
-            <div className="mx-auto h-16 pt-4 gap-8 px-4 sm:px-6 lg:px-8">
-                <h3 className="text-center text-lg font-bold italic">
-                    📚 Recommended Reading
-                </h3>
-            </div>
-        </header>
-    )
+export default function TitleBar({ title, subtitle }) {
+  return (
+    <header style={{ padding: "16px 24px", borderBottom: "1px solid #eee" }}>
+      <h2 style={{ margin: 0 }}>{title}</h2>
+      <p style={{ margin: "6px 0 0 0", color: "#666" }}>{subtitle}</p>
+    </header>
+  )
 }
-
-export default TitleBar
