@@ -37,7 +37,6 @@ function getSex(p) {
 }
 
 function getLngLat(p) {
-  // GeoJSON Feature
   if (Array.isArray(p?.geometry?.coordinates) && p.geometry.coordinates.length >= 2) {
     const [lng, lat] = p.geometry.coordinates
     if (Number.isFinite(lng) && Number.isFinite(lat)) return [lng, lat]
@@ -48,6 +47,16 @@ function getLngLat(p) {
   const lat = parseFloat(o.latitude ?? o.lat ?? o.LAT ?? o.Latitude)
   if (Number.isFinite(lng) && Number.isFinite(lat)) return [lng, lat]
   return null
+}
+
+function cleanQuery(input) {
+  return String(input ?? "")
+    .replace(/\(.*?\)/g, " ")
+    .replace(/\b\d{4}\b/g, " ")
+    .replace(/[–—]/g, " ")
+    .replace(/[^a-zA-Z0-9\u00C0-\u024F\u4e00-\u9fff\s'-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
 }
 
 function toGeoJSON(input) {
@@ -66,6 +75,9 @@ function toGeoJSON(input) {
         const title = o.title ?? o.person ?? o.name ?? o.inscription ?? "Plaque"
         const inscription = o.inscription ?? o.description ?? ""
 
+        const personName = String(o.person ?? o.name ?? title ?? "Unknown")
+        const olQuery = cleanQuery(personName || title)
+
         return {
           type: "Feature",
           geometry: { type: "Point", coordinates: coords },
@@ -76,6 +88,8 @@ function toGeoJSON(input) {
             sex: String(sex),
             isFemale: sex === "female" ? 1 : 0,
             role: String(o.role ?? o.occupation ?? o.category ?? "Unknown"),
+            personName,
+            olQuery,
           },
         }
       })
@@ -145,9 +159,7 @@ export default function MapDisplay({
   }
 
   const interactiveLayerIds =
-    sexView === "female"
-      ? ["plaques-female"]
-      : ["plaques-female", "plaques-other"]
+    sexView === "female" ? ["plaques-female"] : ["plaques-female", "plaques-other"]
 
   return (
     <div className="rounded-xl overflow-hidden bg-white shadow-sm">

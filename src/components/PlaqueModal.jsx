@@ -1,81 +1,150 @@
-import { useEffect, useState } from "react"
-import BookListItem from "./BookListItem"
+import { useEffect, useMemo, useState } from "react"
 
-export default function PlaqueModal({ setIsModalOpen, selectedPlaque }) {
+function cleanQuery(input) {
+  return String(input ?? "")
+    .replace(/\(.*?\)/g, " ") // remove (...) e.g. dates
+    .replace(/\b\d{4}\b/g, " ") // remove years
+    .replace(/[–—]/g, " ")
+    .replace(/[^a-zA-Z0-9\u00C0-\u024F\u4e00-\u9fff\s'-]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
+export default function PlaqueModal({ isOpen, onClose, plaque }) {
+  const [loading, setLoading] = useState(false)
   const [books, setBooks] = useState([])
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
-  const author = selectedPlaque?.properties?.lead_subject_name || ""
+  const displayName =
+    plaque?.personName ?? plaque?.title ?? plaque?.name ?? "Unknown"
+
+  const query = useMemo(() => {
+    const q =
+      plaque?.olQuery ??
+      plaque?.personName ??
+      plaque?.title ??
+      plaque?.name ??
+      ""
+    return cleanQuery(q)
+  }, [plaque])
 
   useEffect(() => {
-    if (!author) {
-      setBooks([])
-      setLoading(false)
-      return
-    }
+    if (!isOpen) return
+    setBooks([])
+    setError(null)
 
-    const controller = new AbortController()
+    if (!query) return
 
-    async function fetchBooks() {
-      setLoading(true)
-      setError(null)
-      setBooks([])
-
+    let cancelled = false
+    async function run() {
       try {
-        const q = encodeURIComponent(author)
-        const url = `https://openlibrary.org/search.json?author=${q}&limit=8&fields=key,title,author_name,first_publish_year,cover_edition_key`
-        const res = await fetch(url, { signal: controller.signal })
+        setLoading(true)
+        const url = `https://openlibrary.org/search.json?q=${encodeURIComponent(
+          query
+        )}&limit=8`
+        const res = await fetch(url)
         if (!res.ok) throw new Error(`OpenLibrary error: ${res.status}`)
         const data = await res.json()
-        setBooks(Array.isArray(data.docs) ? data.docs : [])
+        if (cancelled) return
+
+        const docs = Array.isArray(data?.docs) ? data.docs : []
+        const picked = docs.slice(0, 8).map((d) => ({
+          key: d.key,
+          title: d.title,
+          author: Array.isArray(d.author_name) ? d.author_name.join(", ") : "",
+          year: d.first_publish_year ?? "",
+          cover: d.cover_i
+            ? `https://covers.openlibrary.org/b/id/${d.cover_i}-M.jpg`
+            : null,
+          link: d.key ? `https://openlibrary.org${d.key}` : null,
+        }))
+
+        setBooks(picked)
       } catch (e) {
-        if (e.name !== "AbortError") setError(String(e.message || e))
+        setError(e?.message ?? "Failed to fetch")
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
+    run()
 
-    fetchBooks()
-    return () => controller.abort()
-  }, [author])
+    return () => {
+      cancelled = true
+    }
+  }, [isOpen, query])
+
+  if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 z-50 grid place-content-center bg-black/50 p-4" role="dialog" aria-modal="true">
-      <div className="w-full max-w-xl rounded-lg bg-white p-6 shadow-lg">
-        <div className="flex items-start justify-between gap-4">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
+      <div className="w-full max-w-2xl rounded-2xl bg-white shadow-lg">
+        <div className="flex items-start justify-between gap-4 p-5">
           <div>
-            <h2 className="text-xl font-bold text-gray-900 sm:text-2xl">
-              Recommended Reading: {author || "Unknown"}
-            </h2>
-            <p className="text-sm text-gray-600 mt-1">
-              {(selectedPlaque?.properties?.inscription || "").slice(0, 160)}
-            </p>
+            <div className="text-xl font-bold">
+              Recommended Reading: {displayName}
+            </div>
+            <div className="text-sm text-gray-600 mt-1">
+              Query: {query || "—"}
+            </div>
           </div>
 
           <button
-            type="button"
-            className="-me-3 -mt-3 rounded-full p-2 text-gray-400 transition-colors hover:bg-gray-50 hover:text-gray-700"
-            aria-label="Close"
-            onClick={() => setIsModalOpen(false)}
+            className="rounded-xl border border-gray-200 px-3 py-2 text-sm hover:bg-gray-50"
+            onClick={onClose}
           >
             ✕
           </button>
         </div>
 
-        <div className="mt-4">
-          {loading ? <p>Loading recommended reading…</p> : null}
-          {error ? <p className="text-red-600">Failed to load: {error}</p> : null}
-          {!loading && !error && books.length === 0 ? <p>No results found.</p> : null}
+        <div className="px-5 pb-5">
+          <div className="text-sm text-gray-700 mb-3">
+            <span className="font-semibold">Sex:</span>{" "}
+            {plaque?.sex ?? "unknown"}{" "}
+            <span className="mx-2">•</span>
+            <span className="font-semibold">Role:</span>{" "}
+            {plaque?.role ?? "unknown"}
+          </div>
 
-          {!loading && !error
-            ? books.map((book, idx) => (
-                <BookListItem
-                  key={book.cover_edition_key || book.key || `${author}-${idx}`}
-                  book={book}
-                />
-              ))
-            : null}
+          {loading && <div className="text-sm">Loading…</div>}
+          {error && <div className="text-sm text-red-600">{error}</div>}
+
+          {!loading && !error && books.length === 0 && (
+            <div className="text-sm">No results found.</div>
+          )}
+
+          {!loading && books.length > 0 && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {books.map((b) => (
+                <a
+                  key={b.key}
+                  href={b.link ?? "#"}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex gap-3 rounded-xl border border-gray-200 p-3 hover:bg-gray-50"
+                >
+                  <div className="h-20 w-14 shrink-0 overflow-hidden rounded-lg bg-gray-100">
+                    {b.cover ? (
+                      <img
+                        src={b.cover}
+                        alt={b.title}
+                        className="h-full w-full object-cover"
+                      />
+                    ) : null}
+                  </div>
+
+                  <div className="min-w-0">
+                    <div className="font-semibold truncate">{b.title}</div>
+                    <div className="text-sm text-gray-600 truncate">
+                      {b.author || "Unknown author"}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {b.year || ""}
+                    </div>
+                  </div>
+                </a>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     </div>
