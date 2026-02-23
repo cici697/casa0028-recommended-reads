@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react"
-import Map, { Source, Layer, Popup } from "react-map-gl"
-import maplibregl from "maplibre-gl"
+import Map, { Source, Layer, Popup } from "react-map-gl/maplibre"
 import "maplibre-gl/dist/maplibre-gl.css"
 
 function normalizeSex(raw) {
@@ -122,13 +121,14 @@ export default function MapDisplay({
   }
 
   const interactiveLayerIds =
-    sexView === "female" ? ["plaques-female"] : ["plaques-female", "plaques-other"]
+    sexView === "female"
+      ? ["plaques-female"]
+      : ["plaques-female", "plaques-other"]
 
   return (
     <div className="rounded-xl overflow-hidden bg-white shadow-sm">
       <div style={{ height: "70vh", width: "100%" }}>
         <Map
-          mapLib={maplibregl}
           initialViewState={{ longitude, latitude, zoom }}
           style={{ width: "100%", height: "100%" }}
           mapStyle="https://demotiles.maplibre.org/style.json"
